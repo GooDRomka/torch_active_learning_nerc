@@ -1,0 +1,9 @@
+.idea
+/venv/
+/results_prtecision/
+/data/
+/logs/
+/__pycache__/
+/.DS_Store
+/saved_models/
+/report/
