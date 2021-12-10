@@ -10,6 +10,7 @@ import os
 import glob
 import shutil
 import torch
+import random
 
 def load_data(file,vectors=None):
     """只读取第1列和最后1列"""
@@ -129,3 +130,12 @@ def compute_price(data):
     for sent in data:
         price+=len(sent)
     return price
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+

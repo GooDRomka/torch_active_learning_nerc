@@ -2,139 +2,74 @@
 from enums import STRATEGY
 from active_utils import *
 from utils import *
-from pnetworks import *
+from networks import *
 from utils import *
 from configs import *
 from sklearn.model_selection import train_test_split
 import os, psutil
 
 def start_active_learning(train, dev, test, model_config):
-    ### собрать Init_data
-    print("1")
+    set_seed(model_config.seed)
+    print("\n\n\n\n Strating new exp with params:", 'selecting_strategy', model_config.select_strategy, 'labeling_strategy', model_config.label_strategy, 'budget', model_config.budget, 'init_budget', model_config.init_budget, 'step_budget', model_config.step_budget,
+                'threshold', model_config.threshold, 'seed', model_config.seed)
     p = psutil.Process(os.getpid())
-    dataPool = DataPool(train['texts'], train['labels'], init_num=0)
-    budget_init = model_config.init_budget
-    sum_price_init, price_init = 0, 0
-    unselected_texts, unselected_labels = dataPool.get_unselected()
 
-    while budget_init > 10 and len(unselected_texts) > 1:
-        unselected_texts, unselected_labels = dataPool.get_unselected()
-        tobe_selected_idxs = ActiveStrategy.random_sampling(unselected_texts, model_config.step_budget)
-        tobe_selected_idxs, budget_init, price_init = choose_ids_by_price(tobe_selected_idxs, budget_init,
-                                                                          unselected_texts)
-        sum_price_init += price_init
-        dataPool.update_pool()
-        dataPool.update(tobe_selected_idxs)
+    dataPool = init_data(DataPool(train['texts'], train['labels'], init_num=0), model_config)
     selected_texts, selected_labels = dataPool.get_selected()
     selected_ids = dataPool.get_selected_id()
 
-    print("init_distribution", init_distribution(selected_labels))
-    print("init_budget",compute_price(selected_labels))
+    stat_in_file(model_config.loginfo, ["initDist", init_distribution(selected_labels), "initbudget", model_config.init_budget,
+                    "initSumPrices", compute_price(selected_labels), "memory", model_config.p.memory_info().rss/1024/1024])
+
+    print("init_distribution", init_distribution(selected_labels),"init_budget", compute_price(selected_labels))
+
 
     embedings, labels = get_embeding( selected_ids, selected_labels, train['embed'])
     X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
-    print("2")
-    ### предобучить модель
-    model = BiLSTM_CRF(model_config)
-    # model.load_state_dict(torch.load(save_model_path))
-    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train,  X_test, y_test, dev['embed'],dev['labels'], model_config)
-    # torch.save(model.state_dict(), save_model_path)
 
+    model = BiLSTM_CRF(model_config)
+    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
+    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train,  X_test, y_test, dev['embed'], dev['labels'], model_config)
+    print("init_model trained, budget", compute_price(selected_labels), "metrics ", metrics)
+
+    stat_in_file(model_config.loginfo,
+                     ["TrainInitFinished", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget,"price", "init_budget", compute_price(selected_labels),
+                      "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", p.memory_info().rss/1024/1024])
 
     ### активка цикл
-
     end_marker, iterations_of_learning, sum_prices, sum_perfect, sum_changed, sum_not_changed, sum_not_perfect, perfect, not_perfect, changed, not_changed, thrown_away, price = False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     while (selected_texts is None) or sum_prices < model_config.budget - 10 and not end_marker:
-        # выбрать несколько примеров с помощью активки и разметить их
         iterations_of_learning += 1
-        unselected_ids = dataPool.get_unselected_id()
-        small_unselected_ids, small_unselected_texts, small_unselected_labels = dataPool.get_unselected_small(model_config.step)
-        small_unselected_embedings, _ = get_embeding( np.array(unselected_ids)[small_unselected_ids], small_unselected_labels,
-                                                                train['embed'])
-        tobe_selected_idxs  = None
 
-        if model_config.select_strategy == STRATEGY.LC:
-            scores = model.predict_viterbi_score(small_unselected_embedings)
-            tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.lc_sampling(scores, small_unselected_embedings,
-                                                                                  model_config.step_budget)
-        elif model_config.select_strategy == STRATEGY.MNLP:
-            scores = model.predict_mnlp_score(small_unselected_embedings)
-            tobe_selected_idxs, tobe_selected_scores, price = ActiveStrategy.mnlp_sampling(scores, small_unselected_embedings,
-                                                                                           model_config.step_budget)
-        elif model_config.select_strategy == STRATEGY.TTE:
-            probs = model.predict_probs(small_unselected_embedings)
-            tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.tte_sampling(probs, small_unselected_embedings,
-                                                                                   model_config.step_budget)
-        elif model_config.select_strategy == STRATEGY.TE:
-            probs = model.predict_probs(small_unselected_embedings)
-            tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.te_sampling(probs, small_unselected_embedings,
-                                                                                  model_config.step_budget)
-        elif model_config.select_strategy == STRATEGY.RAND:
-            tobe_selected_idxs = ActiveStrategy.random_sampling(small_unselected_embedings,
-                                                                model_config.step_budget)
-
-        price = 0
-        if model_config.label_strategy == STRATEGY.LAZY: #разметка проверяется оракулом, испольщуем PREDICT, а не GOLD
-            scores, predicted_labels = predict_precision_span(model, model_config, small_unselected_embedings, small_unselected_labels)
-            tobe_selected_idxs, tobe_selected_scores, thrown_away, perfect, not_perfect, price = ActiveStrategy.sampling_precision(tobe_selected_idxs=tobe_selected_idxs, texts=small_unselected_embedings, scores=scores, threshold=model_config.threshold, step=min(model_config.step, model_config.budget - sum_prices))
-            changed, not_changed = dataPool.update_labels(tobe_selected_idxs, small_unselected_ids, predicted_labels)
-            tobe_selected_idxs = np.array(small_unselected_ids)[tobe_selected_idxs]
-            sum_changed += changed
-            sum_not_changed += not_changed
-
-        else: #оракул размечает используем GOLD разметку
-            tobe_selected_idxs_copy = tobe_selected_idxs.copy()
-            tobe_selected_idxs = []
-            for id in tobe_selected_idxs_copy:
-                cost = len(small_unselected_embedings[id])
-                if price + cost > model_config.budget - sum_prices:
-                    end_marker = True
-                    break
-                else:
-                    tobe_selected_idxs.append(id)
-                    price += cost
-            tobe_selected_idxs = np.array(small_unselected_ids)[tobe_selected_idxs]
-
-        sum_prices += price
-        sum_perfect += perfect
-        sum_not_perfect += not_perfect
-        dataPool.update_pool()
-        dataPool.update(tobe_selected_idxs)
+        ### выбрать несколько примеров с помощью активки и разметить их
+        dataPool, price, perfect, not_perfect, sum_prices = active_learing_sampling(model, dataPool, model_config, train, sum_prices)
         selected_texts, selected_labels = dataPool.get_selected()
         selected_ids = dataPool.get_selected_id()
-        unselected_texts, unselected_labels = dataPool.get_unselected()
-
-
         embedings, labels = get_embeding(selected_ids, selected_labels, train['embed'])
         X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
         fullcost = compute_price(selected_labels)
-        # обучить новую модель
 
+        #### обучить новую модель
         model = BiLSTM_CRF(model_config)
-        # model.load_state_dict(torch.load(save_model_path))
         optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
         model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
-        print("memory after training", p.memory_info().rss/1024/1024)
-        print("iter ", iterations_of_learning, "finished, metrics ", metrics)
-        # torch.save(model.state_dict(), save_model_path)
-        print("5")
 
-    print("6")
+        print("memory after training", model_config.p.memory_info().rss/1024/1024)
+        print("iter ", iterations_of_learning, "finished, metrics edv", metrics)
+        stat_in_file(model_config.loginfo,
+                 ["SelectIterFinished", iterations_of_learning, "len(selected_texts):", len(selected_texts), "price", compute_price(selected_labels),
+                  "iter_spent_budget:", price, "not_porfect:", not_perfect, "thrown_away:", thrown_away, "perfect:", perfect, "total_spent_budget:", sum_prices,
+                  "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", p.memory_info().rss/1024/1024])
 
     model = BiLSTM_CRF(model_config)
     optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-
     model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'], model_config)
-
-
-    tags = []
-    for text in test['embed']:
-        precheck_sent = prepare_sequence(text)
-        _, history = model(precheck_sent)
-        tag = id_to_labels(history, model_config.tag_to_ix)
-        tags.append(tag)
-
+    tags = get_tags(model,test['embed'],model_config)
     pr, re, f1 = model.f1_score_span(test['labels'], tags)
 
-    print("FINAL RESULT ", pr, re, f1)
+    stat_in_file(model_config.loginfo,
+                 ["result", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget, "Init_budget:", model_config.init_budget,
+                  "testprecision", pr, "testrecall", re, "testf1", f1, "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2]])
+
+    print("result", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget, "Init_budget:", model_config.init_budget,
+                  "testprecision", pr, "testrecall", re, "testf1", f1, "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2])

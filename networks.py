@@ -14,6 +14,7 @@ def argmax(vec):
     return idx.item()
 
 
+
 def prepare_sequence(seq):
     return torch.as_tensor(np.array(seq))
 

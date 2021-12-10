@@ -1,26 +1,25 @@
 from enums import STRATEGY
-
+import psutil, os
 
 class ModelConfig(object):
     def __init__(self):
 
-
         self.embedding_dim = 768
         self.hidden_dim = 256
         self.tag_to_ix = {"<START>": 0, "<STOP>": 1, 'B-LOC': 2, 'I-LOC': 3, 'B-PER': 4, 'I-PER': 5, 'B-ORG': 6, 'I-ORG': 7, 'B-MISC': 8, 'I-MISC': 9, "O": 10}
-        self.learning_rate = 0.03
-        self.init_epochs = 2
-        self.init_budget = 4000
+        self.learning_rate = 0.003
+        self.init_budget = 5000
         self.step_budget = 1500
         self.stop_criteria_steps = 14
-        self.budget = 6000
-        self.step = 100
+        self.budget = 15000
         self.select_strategy = STRATEGY.PRECISION
         self.label_strategy = ""
         self.threshold = 0
         self.select_strategy = STRATEGY.RAND
         self.embed_strategy = 'bert'
-
+        self.save_model_path = "saved_models/model.pth"
+        self.loginfo = "./logs/loginfo.csv"
+        self.p = psutil.Process(os.getpid())
         # self.embed_dim = 300
         # self.dropout = 0.5
         # self.lstm_size = 256

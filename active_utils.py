@@ -1,7 +1,7 @@
 import random
 import numpy as np
 import logging
-from pnetworks import *
+from networks import *
 from utils import *
 from configs import *
 import os, psutil
@@ -223,14 +223,10 @@ class ActiveStrategy(object):
 
 
 def predict_precision_span(model, model_config, texts, labels):
-    tags = []
+    tags = get_tags(model,texts,model_config)
     scores = []
-    for label, text in zip(labels, texts):
+    for label, text, tag in zip(labels, texts, tags):
         pr = 0
-        precheck_sent = prepare_sequence(text)
-        _, history = model(precheck_sent)
-        tag = id_to_labels(history, model_config.tag_to_ix)
-        tags.append(tag)
         if len(text) != len(label) or len(label) != len(tag):
             scores.append(pr)
         else:
@@ -249,14 +245,22 @@ def id_to_labels(seq, tag_to_ix):
         labels.append(key_by_value(tag_to_ix, id))
     return labels
 
-
+def get_tags(model,texts,model_config):
+    tags = []
+    for test in texts:
+        precheck_sent = prepare_sequence(test)
+        _, history = model(precheck_sent)
+        tag = id_to_labels(history, model_config.tag_to_ix)
+        tags.append(tag)
+    return tags
 def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
     p = psutil.Process(os.getpid())
     f1s = [-1]
     keep_max, best_epoch,epoch = 0, 0, 0
+    fullcost = compute_price(y_train)+compute_price(y_test)
     print("start training, size train", compute_price(y_train), "size test", compute_price(y_test))
     while keep_max < model_config.stop_criteria_steps:
-        # print("memory before epoch",p.memory_info().rss/1024/1024)
+        # print("memory before epoch",model_config.p.memory_info().rss/1024/1024)
         for sentence, tags in zip(X_train,y_train):
             model.zero_grad()
 
@@ -269,29 +273,101 @@ def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev
             optimizer.step()
         epoch+=1
 
-        tags = []
-        for test in X_test:
-            precheck_sent = prepare_sequence(test)
-            _, history = model(precheck_sent)
-            tag = id_to_labels(history, model_config.tag_to_ix)
-            tags.append(tag)
+        tags = get_tags(model,X_test,model_config)
         pr,re,f1 = model.f1_score_span(y_test, tags)
-
-        print(epoch, pr, re, f1, "memory", p.memory_info().rss/1024/1024)
-        # print("memory after epoch",p.memory_info().rss/1024/1024)
+        print(epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
+        stat_in_file(model_config.loginfo, ["EndEpoch", epoch, "budget:", model_config.budget,"cost_of_train", fullcost,
+                                            "precision", pr, "recall",re, "f1", f1, "memory", p.memory_info().rss/1024/1024])
+        # print("memory after epoch",model_config.p.memory_info().rss/1024/1024)
         keep_max += 1
         if max(f1s) < f1:
             keep_max = 0
             best_epoch = epoch
+            torch.save(model.state_dict(), model_config.save_model_path)
         f1s.append(f1)
-    tags = []
-    for text in X_dev:
-        precheck_sent = prepare_sequence(text)
-        _, history = model(precheck_sent)
-        tag = id_to_labels(history, model_config.tag_to_ix)
-        tags.append(tag)
-    metrics = model.f1_score_span(y_dev, tags)
 
+    model.load_state_dict(torch.load(model_config.save_model_path))
+
+    tags = get_tags(model,X_test,model_config)
+    pr,re,f1 = model.f1_score_span(y_test, tags)
+
+    print("restored_the_best_model",pr,re,f1)
+
+    tags = get_tags(model,X_dev,model_config)
+    metrics = model.f1_score_span(y_dev, tags)
 
     return model, optimizer, loss, metrics
 
+
+def active_learing_sampling(model, dataPool, model_config, train, sum_prices):
+    unselected_ids = dataPool.get_unselected_id()
+    small_unselected_ids, small_unselected_texts, small_unselected_labels = dataPool.get_unselected_small(model_config.step_budget)
+    small_unselected_embedings, _ = get_embeding( np.array(unselected_ids)[small_unselected_ids], small_unselected_labels,
+                                                            train['embed'])
+    tobe_selected_idxs  = None
+
+    if model_config.select_strategy == STRATEGY.LC:
+        scores = model.predict_viterbi_score(small_unselected_embedings)
+        tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.lc_sampling(scores, small_unselected_embedings,
+                                                                              model_config.step_budget)
+    elif model_config.select_strategy == STRATEGY.MNLP:
+        scores = model.predict_mnlp_score(small_unselected_embedings)
+        tobe_selected_idxs, tobe_selected_scores, price = ActiveStrategy.mnlp_sampling(scores, small_unselected_embedings,
+                                                                                       model_config.step_budget)
+    elif model_config.select_strategy == STRATEGY.TTE:
+        probs = model.predict_probs(small_unselected_embedings)
+        tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.tte_sampling(probs, small_unselected_embedings,
+                                                                               model_config.step_budget)
+    elif model_config.select_strategy == STRATEGY.TE:
+        probs = model.predict_probs(small_unselected_embedings)
+        tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.te_sampling(probs, small_unselected_embedings,
+                                                                              model_config.step_budget)
+    elif model_config.select_strategy == STRATEGY.RAND:
+        tobe_selected_idxs = ActiveStrategy.random_sampling(small_unselected_embedings,
+                                                            model_config.step_budget)
+    perfect, not_perfect = 0, 0
+    price = 0
+    if model_config.label_strategy == STRATEGY.LAZY: #разметка проверяется оракулом, испольщуем PREDICT, а не GOLD
+        scores, predicted_labels = predict_precision_span(model, model_config, small_unselected_embedings, small_unselected_labels)
+        tobe_selected_idxs, tobe_selected_scores, thrown_away, perfect, not_perfect, price = ActiveStrategy.sampling_precision(tobe_selected_idxs=tobe_selected_idxs, texts=small_unselected_embedings, scores=scores, threshold=model_config.threshold, step=min(model_config.step_budget, model_config.budget - sum_prices))
+        changed, not_changed = dataPool.update_labels(tobe_selected_idxs, small_unselected_ids, predicted_labels)
+        tobe_selected_idxs = np.array(small_unselected_ids)[tobe_selected_idxs]
+
+    else: #оракул размечает используем GOLD разметку
+        tobe_selected_idxs_copy = tobe_selected_idxs.copy()
+        tobe_selected_idxs = []
+        for id in tobe_selected_idxs_copy:
+            cost = len(small_unselected_embedings[id])
+            if price + cost > model_config.budget - sum_prices:
+                end_marker = True
+                break
+            else:
+                tobe_selected_idxs.append(id)
+                price += cost
+        tobe_selected_idxs = np.array(small_unselected_ids)[tobe_selected_idxs]
+
+    sum_prices += price
+    dataPool.update_pool()
+    dataPool.update(tobe_selected_idxs)
+    return dataPool, price, perfect, not_perfect, sum_prices
+
+def init_data(dataPool,model_config):
+    budget_init = model_config.init_budget
+    sum_price_init, price_init = 0, 0
+    unselected_texts, unselected_labels = dataPool.get_unselected()
+
+    while budget_init > 10 and len(unselected_texts) > 1:
+        unselected_texts, unselected_labels = dataPool.get_unselected()
+        tobe_selected_idxs = ActiveStrategy.random_sampling(unselected_texts, model_config.step_budget)
+        tobe_selected_idxs, budget_init, price_init = choose_ids_by_price(tobe_selected_idxs, budget_init,
+                                                                          unselected_texts)
+        sum_price_init += price_init
+        dataPool.update_pool()
+        dataPool.update(tobe_selected_idxs)
+
+    return dataPool
+
+def stat_in_file(path, stats):
+    with open(path, 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow(stats)
