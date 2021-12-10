@@ -28,13 +28,12 @@ def start_active_learning(train, dev, test, model_config):
     X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
 
     #### обучаем init модель
-    model = BiLSTM_CRF(model_config)
-    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train,  X_test, y_test, dev['embed'], dev['labels'], model_config)
+
+    model, optimizer, loss, metrics = train_model(X_train, y_train,  X_test, y_test, dev['embed'], dev['labels'], model_config)
     print("init_model trained, budget", compute_price(selected_labels), "metrics ", metrics)
 
     stat_in_file(model_config.loginfo,
-                     ["TrainInitFinished", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget,"price", "init_budget", compute_price(selected_labels),
+                     ["TrainInitFinished", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget, "init_budget", compute_price(selected_labels),
                       "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", model_config.p.memory_info().rss/1024/1024])
 
     ### активка цикл
@@ -51,15 +50,13 @@ def start_active_learning(train, dev, test, model_config):
         fullcost = compute_price(selected_labels)
 
         #### обучить новую модель
-        model = BiLSTM_CRF(model_config)
-        optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-        model, optimizer, loss, dev_metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
+        model, optimizer, loss, dev_metrics = train_model(X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
 
         #### сохранить результаты
         print("memory after training", model_config.p.memory_info().rss/1024/1024)
         print("iter ", iterations_of_learning, "finished, metrics edv", metrics)
         stat_in_file(model_config.loginfo,
-                 ["SelectIterFinished", iterations_of_learning, "len(selected_texts):", len(selected_texts), "price", compute_price(selected_labels),
+                 ["SelectIterFinished", iterations_of_learning, "len(selected_texts):", len(selected_texts), "fullcost", compute_price(selected_labels),
                   "iter_spent_budget:", price, "not_porfect:", not_perfect, "thrown_away:", thrown_away, "perfect:", perfect, "total_spent_budget:", sum_prices,
                   "devprecision", dev_metrics[0], "devrecall", dev_metrics[1], "devf1", dev_metrics[2], "memory", model_config.p.memory_info().rss/1024/1024])
 

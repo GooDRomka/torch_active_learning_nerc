@@ -20,6 +20,7 @@ class ModelConfig(object):
         self.save_model_path = "saved_models/model.pth"
         self.loginfo = "./logs/loginfo.csv"
         self.p = psutil.Process(os.getpid())
+
         # self.embed_dim = 300
         # self.dropout = 0.5
         # self.lstm_size = 256

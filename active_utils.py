@@ -253,7 +253,10 @@ def get_tags(model,texts,model_config):
         tag = id_to_labels(history, model_config.tag_to_ix)
         tags.append(tag)
     return tags
-def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
+
+def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
+    model = BiLSTM_CRF(model_config)
+    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
     p = psutil.Process(os.getpid())
     f1s = [-1]
     keep_max, best_epoch,epoch = 0, 0, 0
@@ -274,7 +277,7 @@ def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev
         epoch+=1
 
         tags = get_tags(model,X_test,model_config)
-        pr,re,f1 = model.f1_score_span(y_test, tags)
+        pr, re, f1 = model.f1_score_span(y_test, tags)
         print(epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
         stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost,"precision", pr, "recall",re, "f1", f1,
                                             "memory", p.memory_info().rss/1024/1024])
@@ -288,7 +291,7 @@ def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev
 
     model.load_state_dict(torch.load(model_config.save_model_path))
 
-    tags = get_tags(model,X_test,model_config)
+    tags = get_tags(model, X_test, model_config)
     pr,re,f1 = model.f1_score_span(y_test, tags)
 
     print("restored_the_best_model",pr,re,f1)
