@@ -1,3 +1,4 @@
+
 from enums import STRATEGY
 from active_utils import *
 from utils import *
@@ -5,10 +6,12 @@ from pnetworks import *
 from utils import *
 from configs import *
 from sklearn.model_selection import train_test_split
+import os, psutil
 
 def start_active_learning(train, dev, test, model_config):
     ### собрать Init_data
     print("1")
+    p = psutil.Process(os.getpid())
     dataPool = DataPool(train['texts'], train['labels'], init_num=0)
     budget_init = model_config.init_budget
     sum_price_init, price_init = 0, 0
@@ -24,22 +27,24 @@ def start_active_learning(train, dev, test, model_config):
         dataPool.update(tobe_selected_idxs)
     selected_texts, selected_labels = dataPool.get_selected()
     selected_ids = dataPool.get_selected_id()
+
+    print("init_distribution", init_distribution(selected_labels))
+    print("init_budget",compute_price(selected_labels))
+
     embedings, labels = get_embeding( selected_ids, selected_labels, train['embed'])
     X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
     print("2")
     ### предобучить модель
     model = BiLSTM_CRF(model_config)
     # model.load_state_dict(torch.load(save_model_path))
-    optimizer = optim.SGD(model.parameters(), model_config.learning_rate, weight_decay=1e-4)
-
-    model, optimizer, loss = train_model(model, optimizer, X_train, y_train,  X_train, y_train, model_config)
+    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
+    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train,  X_test, y_test, dev['embed'],dev['labels'], model_config)
     # torch.save(model.state_dict(), save_model_path)
 
 
     ### активка цикл
 
     end_marker, iterations_of_learning, sum_prices, sum_perfect, sum_changed, sum_not_changed, sum_not_perfect, perfect, not_perfect, changed, not_changed, thrown_away, price = False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    print("3")
     while (selected_texts is None) or sum_prices < model_config.budget - 10 and not end_marker:
         # выбрать несколько примеров с помощью активки и разметить их
         iterations_of_learning += 1
@@ -48,6 +53,7 @@ def start_active_learning(train, dev, test, model_config):
         small_unselected_embedings, _ = get_embeding( np.array(unselected_ids)[small_unselected_ids], small_unselected_labels,
                                                                 train['embed'])
         tobe_selected_idxs  = None
+
         if model_config.select_strategy == STRATEGY.LC:
             scores = model.predict_viterbi_score(small_unselected_embedings)
             tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.lc_sampling(scores, small_unselected_embedings,
@@ -76,8 +82,8 @@ def start_active_learning(train, dev, test, model_config):
             tobe_selected_idxs = np.array(small_unselected_ids)[tobe_selected_idxs]
             sum_changed += changed
             sum_not_changed += not_changed
+
         else: #оракул размечает используем GOLD разметку
-            tobe_selected_idxs = np.array(small_unselected_ids)
             tobe_selected_idxs_copy = tobe_selected_idxs.copy()
             tobe_selected_idxs = []
             for id in tobe_selected_idxs_copy:
@@ -103,28 +109,32 @@ def start_active_learning(train, dev, test, model_config):
         embedings, labels = get_embeding(selected_ids, selected_labels, train['embed'])
         X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
         fullcost = compute_price(selected_labels)
-        print("4")
         # обучить новую модель
+
         model = BiLSTM_CRF(model_config)
         # model.load_state_dict(torch.load(save_model_path))
-        optimizer = optim.SGD(model.parameters(), model_config.learning_rate, weight_decay=1e-4)
-        model, optimizer, loss = train_model(model, optimizer, X_train, y_train, X_test, y_test, model_config)
+        optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
+        model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
+        print("memory after training", p.memory_info().rss/1024/1024)
+        print("iter ", iterations_of_learning, "finished, metrics ", metrics)
         # torch.save(model.state_dict(), save_model_path)
         print("5")
 
     print("6")
-    model = BiLSTM_CRF(model_config)
-    optimizer = optim.SGD(model.parameters(), model_config.learning_rate, weight_decay=1e-4)
 
-    model, optimizer, loss = train_model(model, optimizer, X_train, y_train, X_test, y_test, model_config)
+    model = BiLSTM_CRF(model_config)
+    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
+
+    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'], model_config)
 
 
     tags = []
-    for test in X_test:
-        precheck_sent = prepare_sequence(test)
+    for text in test['embed']:
+        precheck_sent = prepare_sequence(text)
         _, history = model(precheck_sent)
         tag = id_to_labels(history, model_config.tag_to_ix)
         tags.append(tag)
 
-    pr, re, f1 = model.f1_score_span(y_test, tags)
-    print(pr, re, f1)
+    pr, re, f1 = model.f1_score_span(test['labels'], tags)
+
+    print("FINAL RESULT ", pr, re, f1)

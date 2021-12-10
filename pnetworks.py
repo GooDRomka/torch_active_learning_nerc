@@ -1,5 +1,5 @@
 # Author: Robert Guthrie
-from seqeval.metrics import classification_report, f1_score,precision_score,recall_score
+from seqeval.metrics import classification_report, f1_score, precision_score, recall_score
 import numpy as np
 import torch
 import torch.autograd as autograd

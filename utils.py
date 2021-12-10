@@ -112,3 +112,20 @@ def choose_ids_by_price(idxs, budget, texts):
             selected_ids.append(id)
             price += cost
     return selected_ids, budget - price, price
+
+def init_distribution(labels):
+    all_labels = []
+    for label_n in labels:
+        for label in label_n:
+            all_labels.append(label)
+    unic_labels = set(all_labels)
+    distribution = {}
+    for label in unic_labels:
+        distribution.update({label: all_labels.count(label)})
+    return sorted(distribution.items())
+
+def compute_price(data):
+    price = 0
+    for sent in data:
+        price+=len(sent)
+    return price

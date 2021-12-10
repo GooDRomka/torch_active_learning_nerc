@@ -4,7 +4,7 @@ import logging
 from pnetworks import *
 from utils import *
 from configs import *
-
+import os, psutil
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -250,11 +250,13 @@ def id_to_labels(seq, tag_to_ix):
     return labels
 
 
-def train_model(model, optimizer, X_train, y_train, X_test, y_test, model_config):
+def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
+    p = psutil.Process(os.getpid())
     f1s = [-1]
-    keep_max, best_epoch,epoch = 0, 0,0
-    print("start training, size of data is ", len(X_train), len(y_train))
+    keep_max, best_epoch,epoch = 0, 0, 0
+    print("start training, size train", compute_price(y_train), "size test", compute_price(y_test))
     while keep_max < model_config.stop_criteria_steps:
+        # print("memory before epoch",p.memory_info().rss/1024/1024)
         for sentence, tags in zip(X_train,y_train):
             model.zero_grad()
 
@@ -274,10 +276,22 @@ def train_model(model, optimizer, X_train, y_train, X_test, y_test, model_config
             tag = id_to_labels(history, model_config.tag_to_ix)
             tags.append(tag)
         pr,re,f1 = model.f1_score_span(y_test, tags)
-        print(epoch, pr,re,f1)
+
+        print(epoch, pr, re, f1, "memory", p.memory_info().rss/1024/1024)
+        # print("memory after epoch",p.memory_info().rss/1024/1024)
         keep_max += 1
         if max(f1s) < f1:
             keep_max = 0
             best_epoch = epoch
         f1s.append(f1)
-    return model, optimizer, loss
+    tags = []
+    for text in X_dev:
+        precheck_sent = prepare_sequence(text)
+        _, history = model(precheck_sent)
+        tag = id_to_labels(history, model_config.tag_to_ix)
+        tags.append(tag)
+    metrics = model.f1_score_span(y_dev, tags)
+
+
+    return model, optimizer, loss, metrics
+
