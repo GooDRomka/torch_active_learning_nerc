@@ -1,8 +1,7 @@
-from utils import *
 from active_utils import *
 from configs import *
 from active_learning import start_active_learning
-import psutil
+
 
 model_config = ModelConfig()
 train_file = './data/english/train.txt'
@@ -17,11 +16,15 @@ train = load_data(train_file, train_vectors)
 dev = load_data(dev_file, dev_vectors)
 test = load_data(test_file, test_vectors)
 
-params = [[STRATEGY.RAND, STRATEGY.LAZY, 2000, 15000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 3000, 15000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 4000, 15000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 5000, 15000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 7000, 15000, 0.5]
+number = find_new_number("logs/active")
+model_config.loginfo = "logs/active/" + number + "_loginfo.csv"
+
+params = [[STRATEGY.RAND, STRATEGY.LAZY, 2000, 20000, 0.5],
+          [STRATEGY.RAND, STRATEGY.LAZY, 3000, 20000, 0.5],
+          [STRATEGY.RAND, STRATEGY.LAZY, 4000, 20000, 0.5],
+          [STRATEGY.RAND, STRATEGY.LAZY, 5000, 20000, 0.5],
+          [STRATEGY.RAND, STRATEGY.LAZY, 6000, 20000, 0.5],
+          [STRATEGY.RAND, STRATEGY.LAZY, 7000, 20000, 0.5],
           ]
 
 seed = 0

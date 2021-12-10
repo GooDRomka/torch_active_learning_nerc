@@ -276,8 +276,8 @@ def train_model(model, optimizer, X_train, y_train, X_test, y_test, X_dev, y_dev
         tags = get_tags(model,X_test,model_config)
         pr,re,f1 = model.f1_score_span(y_test, tags)
         print(epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
-        stat_in_file(model_config.loginfo, ["EndEpoch", epoch, "budget:", model_config.budget,"cost_of_train", fullcost,
-                                            "precision", pr, "recall",re, "f1", f1, "memory", p.memory_info().rss/1024/1024])
+        stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost,"precision", pr, "recall",re, "f1", f1,
+                                            "memory", p.memory_info().rss/1024/1024])
         # print("memory after epoch",model_config.p.memory_info().rss/1024/1024)
         keep_max += 1
         if max(f1s) < f1:

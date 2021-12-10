@@ -10,10 +10,10 @@ import os, psutil
 
 def start_active_learning(train, dev, test, model_config):
     set_seed(model_config.seed)
-    print("\n\n\n\n Strating new exp with params:", 'selecting_strategy', model_config.select_strategy, 'labeling_strategy', model_config.label_strategy, 'budget', model_config.budget, 'init_budget', model_config.init_budget, 'step_budget', model_config.step_budget,
+    print("\n\n\n\n Strating new exp  \"active\" with params:", 'selecting_strategy', model_config.select_strategy, 'labeling_strategy', model_config.label_strategy, 'budget', model_config.budget, 'init_budget', model_config.init_budget, 'step_budget', model_config.step_budget,
                 'threshold', model_config.threshold, 'seed', model_config.seed)
-    p = psutil.Process(os.getpid())
 
+    #### набираем init данные
     dataPool = init_data(DataPool(train['texts'], train['labels'], init_num=0), model_config)
     selected_texts, selected_labels = dataPool.get_selected()
     selected_ids = dataPool.get_selected_id()
@@ -27,6 +27,7 @@ def start_active_learning(train, dev, test, model_config):
     embedings, labels = get_embeding( selected_ids, selected_labels, train['embed'])
     X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
 
+    #### обучаем init модель
     model = BiLSTM_CRF(model_config)
     optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
     model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train,  X_test, y_test, dev['embed'], dev['labels'], model_config)
@@ -34,7 +35,7 @@ def start_active_learning(train, dev, test, model_config):
 
     stat_in_file(model_config.loginfo,
                      ["TrainInitFinished", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget,"price", "init_budget", compute_price(selected_labels),
-                      "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", p.memory_info().rss/1024/1024])
+                      "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", model_config.p.memory_info().rss/1024/1024])
 
     ### активка цикл
     end_marker, iterations_of_learning, sum_prices, sum_perfect, sum_changed, sum_not_changed, sum_not_perfect, perfect, not_perfect, changed, not_changed, thrown_away, price = False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -52,24 +53,22 @@ def start_active_learning(train, dev, test, model_config):
         #### обучить новую модель
         model = BiLSTM_CRF(model_config)
         optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-        model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
+        model, optimizer, loss, dev_metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'],  model_config)
 
+        #### сохранить результаты
         print("memory after training", model_config.p.memory_info().rss/1024/1024)
         print("iter ", iterations_of_learning, "finished, metrics edv", metrics)
         stat_in_file(model_config.loginfo,
                  ["SelectIterFinished", iterations_of_learning, "len(selected_texts):", len(selected_texts), "price", compute_price(selected_labels),
                   "iter_spent_budget:", price, "not_porfect:", not_perfect, "thrown_away:", thrown_away, "perfect:", perfect, "total_spent_budget:", sum_prices,
-                  "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2], "memory", p.memory_info().rss/1024/1024])
+                  "devprecision", dev_metrics[0], "devrecall", dev_metrics[1], "devf1", dev_metrics[2], "memory", model_config.p.memory_info().rss/1024/1024])
 
-    model = BiLSTM_CRF(model_config)
-    optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
-    model, optimizer, loss, metrics = train_model(model, optimizer, X_train, y_train, X_test, y_test, dev['embed'], dev['labels'], model_config)
-    tags = get_tags(model,test['embed'],model_config)
-    pr, re, f1 = model.f1_score_span(test['labels'], tags)
+    tags_test= get_tags(model, test['embed'], model_config)
+    test_pr, test_re, test_f1 = model.f1_score_span(test['labels'], tags_test)
 
     stat_in_file(model_config.loginfo,
                  ["result", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget, "Init_budget:", model_config.init_budget,
-                  "testprecision", pr, "testrecall", re, "testf1", f1, "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2]])
+                  "testprecision", test_pr, "testrecall", test_re, "testf1", test_f1, "devprecision", dev_metrics[0], "devrecall", dev_metrics[1], "devf1", dev_metrics[2]])
 
     print("result", "len(selected_texts):", len(selected_texts), "budget:", model_config.budget, "Init_budget:", model_config.init_budget,
-                  "testprecision", pr, "testrecall", re, "testf1", f1, "devprecision", metrics[0], "devrecall", metrics[1], "devf1", metrics[2])
+                  "testprecision", test_pr, "testrecall", test_re, "testf1", test_f1, "devprecision", dev_metrics[0], "devrecall", dev_metrics[1], "devf1", dev_metrics[2])

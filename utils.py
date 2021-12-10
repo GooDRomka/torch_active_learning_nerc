@@ -139,3 +139,21 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+def find_new_number(directory):
+    result = 0
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    for filename in os.listdir(directory):
+        try:
+            num = int(filename[:2])
+            result = num if num > result else result
+        except Exception:
+            pass
+
+    if result+1<10:
+        result = "0"+str(result+1)
+    else:
+        result = str(result+1)
+    return result
+
