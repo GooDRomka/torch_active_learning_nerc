@@ -292,7 +292,6 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             best_epoch = epoch
             torch.save(model.state_dict(), model_config.save_model_path)
         f1s.append(f1)
-        print(keep_max, "m", max(f1s), "c", f1, )
 
     model.load_state_dict(torch.load(model_config.save_model_path))
     tags, scores = get_tags(model, X_test, model_config)
