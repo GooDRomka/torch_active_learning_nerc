@@ -265,8 +265,11 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
     keep_max, best_epoch,epoch = 0, 0, 0
     fullcost = compute_price(y_train)+compute_price(y_test)
     print("start training, size train", compute_price(y_train), "size test", compute_price(y_test))
+
     while keep_max < model_config.stop_criteria_steps:
         # print("memory before epoch",model_config.p.memory_info().rss/1024/1024)
+        sum_loss = 0
+        k = 0
         for i, (sentence, tags) in enumerate(zip(X_train,y_train)):
             # torch.manual_seed(i*1000+i)
             model.zero_grad()
@@ -275,16 +278,17 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             targets = torch.tensor([model_config.tag_to_ix[t] for t in tags], dtype=torch.long)
 
             loss = model.neg_log_likelihood(sentence_in, targets)
+            sum_loss+=loss.detach().numpy()[0]
 
             loss.backward()
             optimizer.step()
+            k=i
         epoch+=1
-
         tags, scores = get_tags(model, X_test, model_config)
         pr, re, f1 = model.f1_score_span(y_test, tags)
-        print("  ", epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
-        stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost,"precision", pr, "recall",re, "f1", f1,
-                                            "memory", p.memory_info().rss/1024/1024])
+        print("  ", epoch, "small_test", pr, re, f1, "loss", sum_loss, k, "memory", model_config.p.memory_info().rss/1024/1024)
+        stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost, "precision", pr, "recall", re, "f1", f1,
+                                            "loss", sum_loss, k, "memory", p.memory_info().rss/1024/1024])
         # print("memory after epoch",model_config.p.memory_info().rss/1024/1024)
         keep_max += 1
         if max(f1s) < f1:
