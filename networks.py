@@ -33,7 +33,7 @@ class BiLSTM_CRF(nn.Module):
         self.hidden_dim = config.hidden_dim
         self.tag_to_ix = config.tag_to_ix
         self.tagset_size = len(config.tag_to_ix)
-
+        self.config = config
 
         self.lstm = nn.LSTM(config.embedding_dim, config.hidden_dim // 2,
                             num_layers=1, bidirectional=True)
@@ -54,8 +54,9 @@ class BiLSTM_CRF(nn.Module):
         self.hidden = self.init_hidden()
 
     def init_hidden(self):
-        return (torch.randn(2, 1, self.hidden_dim // 2),
-                torch.randn(2, 1, self.hidden_dim // 2))
+        torch.manual_seed(self.config.seed)
+        return (torch.zeros(2, 1, self.hidden_dim // 2),
+                torch.zeros(2, 1, self.hidden_dim // 2))
 
     def _forward_alg(self, feats):
         # Do the forward algorithm to compute the partition function

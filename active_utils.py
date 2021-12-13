@@ -248,7 +248,8 @@ def id_to_labels(seq, tag_to_ix):
 def get_tags(model,texts,model_config):
     tags = []
     scores = []
-    for test in texts:
+    for i, test in enumerate(texts):
+        torch.manual_seed(i*1000+i)
         precheck_sent = prepare_sequence(test)
         score, history = model(precheck_sent)
         tag = id_to_labels(history, model_config.tag_to_ix)
@@ -266,7 +267,8 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
     print("start training, size train", compute_price(y_train), "size test", compute_price(y_test))
     while keep_max < model_config.stop_criteria_steps:
         # print("memory before epoch",model_config.p.memory_info().rss/1024/1024)
-        for sentence, tags in zip(X_train,y_train):
+        for i, (sentence, tags) in enumerate(zip(X_train,y_train)):
+            # torch.manual_seed(i*1000+i)
             model.zero_grad()
 
             sentence_in = torch.as_tensor(np.array(sentence))
@@ -290,7 +292,9 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             best_epoch = epoch
             torch.save(model.state_dict(), model_config.save_model_path)
         f1s.append(f1)
+        print(keep_max, "m", max(f1s), "c", f1, )
 
+    model.load_state_dict(torch.load(model_config.save_model_path))
     tags, scores = get_tags(model, X_test, model_config)
     pr, re, f1 = model.f1_score_span(y_test, tags)
 
