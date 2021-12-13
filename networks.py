@@ -55,8 +55,8 @@ class BiLSTM_CRF(nn.Module):
 
     def init_hidden(self):
         torch.manual_seed(self.config.seed)
-        return (torch.zeros(2, 1, self.hidden_dim // 2),
-                torch.zeros(2, 1, self.hidden_dim // 2))
+        return (torch.randn(2, 1, self.hidden_dim // 2),
+                torch.randn(2, 1, self.hidden_dim // 2))
 
     def _forward_alg(self, feats):
         # Do the forward algorithm to compute the partition function

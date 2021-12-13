@@ -33,12 +33,11 @@ model_config.loginfo = "logs/active/" + number + "_loginfo.csv"
 
 model_config.save_model_path = "saved_models/active_model.pth"
 
-params = [[STRATEGY.RAND, STRATEGY.LAZY, 1000, 20000, 0.5],
+params = [
+          [STRATEGY.RAND, STRATEGY.LAZY, 500,  20000, 0.5],
           [STRATEGY.RAND, STRATEGY.LAZY, 1500, 20000, 0.5],
           [STRATEGY.RAND, STRATEGY.LAZY, 2000, 20000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 3000, 20000, 0.5],
           [STRATEGY.RAND, STRATEGY.LAZY, 4000, 20000, 0.5],
-          [STRATEGY.RAND, STRATEGY.LAZY, 5000, 20000, 0.5],
           [STRATEGY.RAND, STRATEGY.LAZY, 6000, 20000, 0.5],
 
           ]
