@@ -9,7 +9,7 @@ import random
 import pylab
 from configs import ModelConfig, ActiveConfig
 import matplotlib.pyplot as plt
-
+from show_simple import read_file_simple
 def read_from_csv(path):
     with open(path, "r") as f:
         reader = csv.reader(f)
@@ -75,7 +75,13 @@ if __name__ == '__main__':
         os.makedirs(directory_report)
     new_plot_num = find_new_number(directory_report)
 
-    path_simple = "logs/active/01_loginfo.csv"
+    path_simple = "logs/simple/01_loginfo.csv"
+    experiments = read_file_simple(path_simple)
+    print(experiments)
+    experiments_simple = experiments.groupby('budget', as_index=False).agg({'f1': ['mean', 'std'],'precision': ['mean', 'std'],'recall': ['mean', 'std']})
+
+    colors = [[0, 0.4470, 0.7410],[0, 0, 1],[0.8500, 0.3250, 0.0980],[0, 0.5, 0],[1, 0, 0],[0.4940, 0.1840, 0.5560],[0, 0.75, 0.75],
+    [0.4660, 0.6740, 0.1880],[0.75, 0, 0.75],[0.3010, 0.7450, 0.9330],[0.75, 0.75, 0],[0.6350, 0.0780, 0.1840],[0.25, 0.25, 0.25]]
 
 
     i = 0
@@ -102,14 +108,16 @@ if __name__ == '__main__':
         plt.figure(figsize=(22,16))
         filt = max(budget)*scale+max(init_budget)+1000
 
-        # experiments_simple_filt = experiments_simple[experiments_simple['budget']<=filt]
-        # plt.plot(experiments_simple_filt['budget'], experiments_simple_filt[('f1','mean')],label="simple", marker="o")
-        # plt.fill_between(experiments_simple_filt['budget'],experiments_simple_filt[('f1','mean')]+experiments_simple_filt[('f1','std')],experiments_simple_filt[('f1','mean')]- experiments_simple_filt[('f1','std')],alpha=.2)
+        experiments_simple_filt = experiments_simple[experiments_simple['budget']<=filt]
 
+        plt.plot(experiments_simple_filt['budget'], experiments_simple_filt[('f1','mean')],label="simple", marker="o", color="black")
+        plt.fill_between(experiments_simple_filt['budget'],experiments_simple_filt[('f1','mean')]+experiments_simple_filt[('f1','std')],experiments_simple_filt[('f1','mean')]- experiments_simple_filt[('f1','std')],alpha=.2)
+        j=0
         for i in init_budget:
             df = iterations[iterations['init_budget']==i]
             # print(df)
-            plt.plot(df['spent_budget'],df[('bestf1dev','mean')], label=str(i), marker="o")
+            plt.plot(df['spent_budget'],df[('bestf1dev','mean')], label=str(i), marker="o", color=colors[j])
+            j+=1
             plt.fill_between(df['spent_budget'],df[('bestf1dev','mean')]+df[('bestf1dev','std')],df[('bestf1dev','mean')]- df[('bestf1dev','std')],alpha=.2)
             # plt.errorbar(df['spent_budget'],df[('bestf1dev','mean')], df[('bestf1dev','std')], linestyle='None', marker='^')
         plt.xlabel('spent_budget')
@@ -138,16 +146,18 @@ if __name__ == '__main__':
 
         filt = max(budget)*scale+max(init_budget)+1000
 
-        # experiments_simple_filt = experiments_simple[experiments_simple['budget']<=filt]
-        # plt.plot(experiments_simple_filt['budget'], experiments_simple_filt[('f1','mean')],label="simple", marker="o")
-        # plt.fill_between(experiments_simple_filt['budget'],experiments_simple_filt[('f1','mean')]+experiments_simple_filt[('f1','std')],experiments_simple_filt[('f1','mean')]- experiments_simple_filt[('f1','std')],alpha=.2)
-
+        experiments_simple_filt = experiments_simple[experiments_simple['budget']<=filt]
+        plt.plot(experiments_simple_filt['budget'], experiments_simple_filt[('f1','mean')],label="simple", marker="o", color="black")
+        plt.fill_between(experiments_simple_filt['budget'],experiments_simple_filt[('f1','mean')]+experiments_simple_filt[('f1','std')],experiments_simple_filt[('f1','mean')]- experiments_simple_filt[('f1','std')],alpha=.2)
+        j = 0
         for i in init_budget:
             df = iterations[iterations['init_budget']==i]
             # print(df)
-            pylab.plot(df['spent_budget'],df[('bestf1dev','mean')], label=str(i), marker="o")
+            pylab.plot(df['spent_budget'], df[('bestf1dev','mean')], label=str(i), marker="o", color=colors[j])
+            j+=1
             pylab.fill_between(df['spent_budget'],df[('bestf1dev','mean')]+df[('bestf1dev','std')],df[('bestf1dev','mean')]- df[('bestf1dev','std')],alpha=.2)
             # plt.errorbar(df['spent_budget'],df[('bestf1dev','mean')], df[('bestf1dev','std')], linestyle='None', marker='^')
+
         pylab.xlabel('spent_budget')
         pylab.ylabel('bestf1dev')
         pylab.legend(loc='best')
