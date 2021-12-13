@@ -49,6 +49,22 @@ def random_color():
     levels = range(32,256,32)
     return tuple(random.choice(levels) for _ in range(3))
 
+def read_file_simple_old(path):
+    experiments = []
+    loginfo = read_from_csv(path)
+    for line in loginfo:
+        if len(line) != 0:
+            if line[0] == "Begin":
+                stat = {"budget": float(line[3]), "iter":[]
+                         }
+            if line[0] == "EndIter":
+                stat["iter"].append([line[14],line[6],line[8],line[10],line[16],line[17],line[18]])
+            if line[0] == "Results":
+                stat.update({"f1": float(line[10]), "precision": float(line[6]), "recall": float(line[8]), "epoch":int(line[14])})
+                experiments.append(stat)
+    return pd.DataFrame(experiments)
+
+
 if __name__ == '__main__':
     model_config = ModelConfig()
     directory_report = "report/simple/"
@@ -67,12 +83,22 @@ if __name__ == '__main__':
     print(experiments_simple)
 
     plt.figure(figsize=(10,9))
-    plt.plot(experiments_simple['budget'], experiments_simple[('f1','mean')], marker="o")
+    plt.plot(experiments_simple['budget'], experiments_simple[('f1','mean')], marker="o", label="TORCH")
     plt.fill_between(experiments_simple['budget'],experiments_simple[('f1','mean')]+experiments_simple[('f1','std')],experiments_simple[('f1','mean')]- experiments_simple[('f1','std')],alpha=.2)
 
-    plt.xlabel('budget')
-    plt.ylabel('f1')
-    plt.savefig(directory_report+new_plot_num+'simple.png')
+    #
+    # experiments_old = read_file_simple_old("logs/simple/loginfo_simple_batch_8.csv")
+    # experiments_simple = experiments_old.groupby('budget',as_index=False).agg({'f1': ['mean', 'std'],'precision': ['mean', 'std'],'recall': ['mean', 'std'],"epoch":['mean','std']})
+    #
+    #
+    # plt.plot(experiments_simple['budget'], experiments_simple[('f1','mean')], marker="o", label="TF")
+    # plt.fill_between(experiments_simple['budget'],experiments_simple[('f1','mean')]+experiments_simple[('f1','std')],experiments_simple[('f1','mean')]- experiments_simple[('f1','std')],alpha=.2)
+    # plt.legend(loc='best')
+    # plt.xlabel('budget')
+    # plt.ylabel('f1')
+    # plt.savefig(directory_report+new_plot_num+'simple.png')
+
+
 
 
 
