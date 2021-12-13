@@ -16,8 +16,7 @@ train = load_data(train_file, train_vectors)
 dev = load_data(dev_file, dev_vectors)
 test = load_data(test_file, test_vectors)
 
-params = [1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12000, 15000, 18000, 20000]
-
+params = [500, 750, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 12000, 15000, 18000, 20000, 25000, 30000, 35000, 40000, 45000]
 number = find_new_number("logs/simple")
 model_config.loginfo = "logs/simple/" + number + "_loginfo.csv"
 seed = 0
