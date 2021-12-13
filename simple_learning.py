@@ -30,7 +30,7 @@ def start_simple_learning(train, dev, test, model_config):
     model, optimizer, loss, dev_metrics = train_model(X_train, y_train, X_test, y_test, dev['embed'], dev['labels'], model_config)
 
 
-    tags = get_tags(model, test['embed'], model_config)
+    tags, scores = get_tags(model, test['embed'], model_config)
     test_metrics = model.f1_score_span(test['labels'], tags)
 
     stat_in_file(model_config.loginfo,

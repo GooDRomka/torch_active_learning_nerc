@@ -223,7 +223,7 @@ class ActiveStrategy(object):
 
 
 def predict_precision_span(model, model_config, texts, labels):
-    tags = get_tags(model,texts,model_config)
+    tags, scores = get_tags(model,texts,model_config)
     scores = []
     for label, text, tag in zip(labels, texts, tags):
         pr = 0
@@ -247,12 +247,14 @@ def id_to_labels(seq, tag_to_ix):
 
 def get_tags(model,texts,model_config):
     tags = []
+    scores = []
     for test in texts:
         precheck_sent = prepare_sequence(test)
-        _, history = model(precheck_sent)
+        score, history = model(precheck_sent)
         tag = id_to_labels(history, model_config.tag_to_ix)
         tags.append(tag)
-    return tags
+        scores.append(score)
+    return tags, scores
 
 def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
     model = BiLSTM_CRF(model_config)
@@ -276,9 +278,9 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             optimizer.step()
         epoch+=1
 
-        tags = get_tags(model,X_test,model_config)
+        tags, scores = get_tags(model, X_test, model_config)
         pr, re, f1 = model.f1_score_span(y_test, tags)
-        print(epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
+        print("  ", epoch, "small_test", pr, re, f1, "memory", model_config.p.memory_info().rss/1024/1024)
         stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost,"precision", pr, "recall",re, "f1", f1,
                                             "memory", p.memory_info().rss/1024/1024])
         # print("memory after epoch",model_config.p.memory_info().rss/1024/1024)
@@ -289,14 +291,12 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             torch.save(model.state_dict(), model_config.save_model_path)
         f1s.append(f1)
 
-    model.load_state_dict(torch.load(model_config.save_model_path))
-
-    tags = get_tags(model, X_test, model_config)
-    pr,re,f1 = model.f1_score_span(y_test, tags)
+    tags, scores = get_tags(model, X_test, model_config)
+    pr, re, f1 = model.f1_score_span(y_test, tags)
 
     print("restored_the_best_model",pr,re,f1)
 
-    tags = get_tags(model,X_dev,model_config)
+    tags, scores = get_tags(model,X_dev,model_config)
     metrics = model.f1_score_span(y_dev, tags)
 
     return model, optimizer, loss, metrics
@@ -310,7 +310,7 @@ def active_learing_sampling(model, dataPool, model_config, train, sum_prices):
     tobe_selected_idxs  = None
 
     if model_config.select_strategy == STRATEGY.LC:
-        scores = model.predict_viterbi_score(small_unselected_embedings)
+        tags, scores = get_tags(model, small_unselected_embedings, model_config)
         tobe_selected_idxs, tobe_selected_scores = ActiveStrategy.lc_sampling(scores, small_unselected_embedings,
                                                                               model_config.step_budget)
     elif model_config.select_strategy == STRATEGY.MNLP:

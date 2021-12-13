@@ -54,13 +54,13 @@ def start_active_learning(train, dev, test, model_config):
 
         #### сохранить результаты
         print("memory after training", model_config.p.memory_info().rss/1024/1024)
-        print("iter ", iterations_of_learning, "finished, metrics edv", metrics)
+        print("iter ", iterations_of_learning, "finished, metrics dev", dev_metrics)
         stat_in_file(model_config.loginfo,
                  ["SelectIterFinished", iterations_of_learning, "len(selected_texts):", len(selected_texts), "fullcost", compute_price(selected_labels),
                   "iter_spent_budget:", price, "not_porfect:", not_perfect, "thrown_away:", thrown_away, "perfect:", perfect, "total_spent_budget:", sum_prices,
                   "devprecision", dev_metrics[0], "devrecall", dev_metrics[1], "devf1", dev_metrics[2], "memory", model_config.p.memory_info().rss/1024/1024])
 
-    tags_test= get_tags(model, test['embed'], model_config)
+    tags_test , scores = get_tags(model, test['embed'], model_config)
     test_pr, test_re, test_f1 = model.f1_score_span(test['labels'], tags_test)
 
     stat_in_file(model_config.loginfo,
