@@ -1,7 +1,7 @@
 from active_utils import *
 from configs import *
 from simple_learning import start_simple_learning
-
+import sys
 
 model_config = ModelConfig()
 train_file = './data/english/train.txt'
@@ -21,17 +21,23 @@ number = find_new_number("logs/simple")
 model_config.loginfo = "logs/simple/" + number + "_loginfo.csv"
 seed = 0
 
-model_config.save_model_path = "saved_models/simple_model.pth"
+model_config.save_model_path = "saved_models/simple_model" + number + ".pth"
+
+try:
+    seed_cmd = sys.argv[1]
+except:
+    seed_cmd = "0"
 
 for i in range(5):
         for param in params:
             for j in range(2):
                 seed += 1
-                model_config.init_budget = param
-                model_config.seed = seed
-                stat_in_file(model_config.loginfo, ["\n\n"])
-                stat_in_file(model_config.loginfo, ['BEGIN', 'init_budget', model_config.init_budget, 'seed', model_config.seed ])
-                start_simple_learning(train, dev, test, model_config)
+                if seed>=float(seed_cmd):
+                    model_config.init_budget = param
+                    model_config.seed = seed
+                    stat_in_file(model_config.loginfo, ["\n\n"])
+                    stat_in_file(model_config.loginfo, ['BEGIN', 'init_budget', model_config.init_budget, 'seed', model_config.seed ])
+                    start_simple_learning(train, dev, test, model_config)
 
 
 

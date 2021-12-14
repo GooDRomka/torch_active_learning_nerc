@@ -257,14 +257,14 @@ def get_tags(model,texts,model_config):
         scores.append(score)
     return tags, scores
 
-def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
+def train_model(X_train, y_train, X_dev, y_dev, X_test, y_test,  model_config):
     model = BiLSTM_CRF(model_config)
     optimizer = optim.Adam(model.parameters(), model_config.learning_rate)
     p = psutil.Process(os.getpid())
     f1s = [-1]
     keep_max, best_epoch,epoch = 0, 0, 0
-    fullcost = compute_price(y_train)+compute_price(y_test)
-    print("start training, size train", compute_price(y_train), "size test", compute_price(y_test))
+    fullcost = compute_price(y_train)+compute_price(y_dev)
+    print("start training, size train", compute_price(y_train), "size test", compute_price(y_dev))
 
     while keep_max < model_config.stop_criteria_steps:
         # print("memory before epoch",model_config.p.memory_info().rss/1024/1024)
@@ -284,8 +284,8 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
             optimizer.step()
             k=i
         epoch+=1
-        tags, scores = get_tags(model, X_test, model_config)
-        pr, re, f1 = model.f1_score_span(y_test, tags)
+        tags, scores = get_tags(model, X_dev, model_config)
+        pr, re, f1 = model.f1_score_span(y_dev, tags)
         print("  ", epoch, "small_test", pr, re, f1, "loss", sum_loss, k, "memory", model_config.p.memory_info().rss/1024/1024)
         stat_in_file(model_config.loginfo, ["   EndEpoch", epoch, "cost_of_train", fullcost, "precision", pr, "recall", re, "f1", f1,
                                             "loss", sum_loss, k, "memory", p.memory_info().rss/1024/1024])
@@ -298,15 +298,15 @@ def train_model(X_train, y_train, X_test, y_test, X_dev, y_dev, model_config):
         f1s.append(f1)
 
     model.load_state_dict(torch.load(model_config.save_model_path))
-    tags, scores = get_tags(model, X_test, model_config)
-    pr, re, f1 = model.f1_score_span(y_test, tags)
+    tags, scores = get_tags(model, X_dev, model_config)
+    dev_metrics = model.f1_score_span(y_dev, tags)
 
-    print("restored_the_best_model",pr,re,f1)
+    print("restored_the_best_model",dev_metrics)
 
-    tags, scores = get_tags(model,X_dev,model_config)
-    metrics = model.f1_score_span(y_dev, tags)
+    tags, scores = get_tags(model,X_test,model_config)
+    test_metrics = model.f1_score_span(y_test, tags)
 
-    return model, optimizer, loss, metrics
+    return model, optimizer, loss, test_metrics
 
 
 def active_learing_sampling(model, dataPool, model_config, train, sum_prices):

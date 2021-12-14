@@ -24,10 +24,10 @@ def start_simple_learning(train, dev, test, model_config):
 
 
     embedings, labels = get_embeding(selected_ids, selected_labels, train['embed'])
-    X_train, X_test, y_train, y_test = train_test_split(embedings, labels, test_size=0.2, random_state=42)
+    X_train, X_dev, y_train, y_dev = train_test_split(embedings, labels, test_size=0.2, random_state=42)
 
 
-    model, optimizer, loss, dev_metrics = train_model(X_train, y_train, X_test, y_test, dev['embed'], dev['labels'], model_config)
+    model, optimizer, loss, dev_metrics = train_model(X_train, y_train, X_dev, y_dev, dev['embed'], dev['labels'], model_config)
 
 
     tags, scores = get_tags(model, test['embed'], model_config)
